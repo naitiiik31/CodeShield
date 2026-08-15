@@ -1,6 +1,7 @@
 import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.jsx';
+import CodeShieldLogo from './CodeShieldLogo.jsx';
 
 export default function Navbar() {
   const { user, logout } = useAuth();
@@ -16,17 +17,7 @@ export default function Navbar() {
   return (
     <nav className="navbar">
       <Link to={user ? (isStudent ? '/student/dashboard' : '/dashboard') : '/'} className="navbar-brand" style={{ textDecoration: 'none' }}>
-        <svg width="28" height="28" viewBox="0 0 32 32" fill="none">
-          <rect width="32" height="32" rx="8" fill="url(#grad)" />
-          <path d="M10 16L14 20L22 12" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-          <defs>
-            <linearGradient id="grad" x1="0" y1="0" x2="32" y2="32">
-              <stop stopColor="#6366f1" />
-              <stop offset="1" stopColor="#06b6d4" />
-            </linearGradient>
-          </defs>
-        </svg>
-        <span>CodeGuard</span>
+        <CodeShieldLogo size={30} showText={true} textColor="#f8fafc" />
       </Link>
 
       <div className="navbar-links">

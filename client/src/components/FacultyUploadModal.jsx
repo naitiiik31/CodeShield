@@ -97,7 +97,7 @@ export default function FacultyUploadModal({ assignment, onClose, onSuccess }) {
             onChange={(e) => setZipFile(e.target.files?.[0] || null)}
           />
           <div style={{ fontSize: '0.75rem', color: 'var(--cg-text-muted)', marginTop: '4px' }}>
-            ZIP containing student source code files. CodeGuard will automatically extract and process all code files.
+            ZIP containing student source code files. CodeShield will automatically extract and process all code files.
           </div>
         </div>
 

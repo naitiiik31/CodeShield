@@ -64,7 +64,7 @@ export default function Modal({
         backdropFilter: 'blur(8px)',
         WebkitBackdropFilter: 'blur(8px)',
         display: 'flex',
-        justifyContent: 'center',
+        justify: 'center',
         alignItems: 'center',
         padding: '24px',
       }}
@@ -82,23 +82,24 @@ export default function Modal({
           borderRadius: '16px',
           boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.8)',
           color: 'var(--cg-text)',
+          position: 'relative',
         }}
       >
         {/* MODAL HEADER */}
         {(category || title || subtitle || onClose) && (
           <div
             style={{
-              padding: '24px',
+              padding: '24px 28px',
               borderBottom: '1px solid var(--cg-border)',
               display: 'flex',
-              justify: 'space-between',
-              alignItems: 'flex-start',
+              flexDirection: 'column',
+              justifyContent: 'center',
               background: '#1e293b',
               flexShrink: 0,
-              gap: '16px',
+              position: 'relative',
             }}
           >
-            <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ paddingRight: onClose ? '44px' : '0' }}>
               {category && (
                 <div
                   style={{
@@ -116,7 +117,7 @@ export default function Modal({
               {title && (
                 <h2
                   style={{
-                    fontSize: '1.4rem',
+                    fontSize: '1.35rem',
                     fontWeight: 700,
                     margin: 0,
                     color: 'var(--cg-text)',
@@ -140,7 +141,11 @@ export default function Modal({
               )}
             </div>
 
-            {onClose && <CloseButton onClick={onClose} />}
+            {onClose && (
+              <div style={{ position: 'absolute', top: '20px', right: '24px' }}>
+                <CloseButton onClick={onClose} />
+              </div>
+            )}
           </div>
         )}
 
@@ -152,7 +157,7 @@ export default function Modal({
             overflowX: 'hidden',
             flex: '1 1 auto',
             minHeight: 0,
-            padding: '24px',
+            padding: '24px 28px',
             display: 'flex',
             flexDirection: 'column',
             gap: '20px',
@@ -165,7 +170,7 @@ export default function Modal({
         {footer && (
           <div
             style={{
-              padding: '16px 24px',
+              padding: '16px 28px',
               borderTop: '1px solid var(--cg-border)',
               display: 'flex',
               justify: 'flex-end',

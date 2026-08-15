@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.jsx';
+import CodeShieldLogo from '../components/CodeShieldLogo.jsx';
 
 export default function RegisterPage() {
   const [role, setRole] = useState('faculty');
@@ -49,9 +50,9 @@ export default function RegisterPage() {
   return (
     <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 'calc(100vh - 64px)', padding: '24px' }}>
       <div className="glass-card slide-up" style={{ width: '100%', maxWidth: '480px' }}>
-        <h2 style={{ fontSize: '1.5rem', fontWeight: 700, marginBottom: '8px', textAlign: 'center' }}>
-          Create CodeGuard Account
-        </h2>
+        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '16px' }}>
+          <CodeShieldLogo size={42} showText={true} textColor="#ffffff" />
+        </div>
         <p style={{ color: 'var(--cg-text-muted)', fontSize: '0.875rem', textAlign: 'center', marginBottom: '20px' }}>
           Select your account role to get started
         </p>

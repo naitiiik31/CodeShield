@@ -256,7 +256,7 @@ export default function StudentPortal() {
           ← Change Assignment / Student
         </button>
         <span style={{ color: 'var(--cg-text-muted)', fontSize: '0.85rem' }}>
-          CodeGuard Student Portal
+          CodeShield Student Portal
         </span>
       </div>
 

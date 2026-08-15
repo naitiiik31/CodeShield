@@ -132,7 +132,10 @@ export default function CreateAssignmentModal({ onClose, onSuccess }) {
         }}
       >
         {createdAssignment ? (
-          <div style={{ padding: '32px 24px', textAlign: 'center' }}>
+          <div style={{ padding: '32px 28px', textAlign: 'center', position: 'relative' }}>
+            <div style={{ position: 'absolute', top: '20px', right: '24px' }}>
+              <CloseButton onClick={onClose} />
+            </div>
             <h2 style={{ fontSize: '1.5rem', fontWeight: 700, margin: '0 0 8px 0', color: '#10b981' }}>
               Assignment Created Successfully!
             </h2>
@@ -178,16 +181,17 @@ export default function CreateAssignmentModal({ onClose, onSuccess }) {
             {/* HEADER (ALWAYS VISIBLE AT TOP, NEVER SCROLLS) */}
             <div
               style={{
-                padding: '20px 24px',
+                padding: '20px 28px',
                 borderBottom: '1px solid var(--cg-border)',
                 display: 'flex',
-                justify: 'space-between',
-                alignItems: 'center',
+                flexDirection: 'column',
+                justify: 'center',
                 background: '#1e293b',
                 flexShrink: 0,
+                position: 'relative',
               }}
             >
-              <div>
+              <div style={{ paddingRight: '44px' }}>
                 <h2 style={{ fontSize: '1.25rem', fontWeight: 700, margin: 0, color: 'var(--cg-text)' }}>
                   Create New Assignment
                 </h2>
@@ -195,7 +199,9 @@ export default function CreateAssignmentModal({ onClose, onSuccess }) {
                   Create an assignment for your students
                 </p>
               </div>
-              <CloseButton onClick={onClose} />
+              <div style={{ position: 'absolute', top: '20px', right: '24px' }}>
+                <CloseButton onClick={onClose} />
+              </div>
             </div>
 
             {error && (

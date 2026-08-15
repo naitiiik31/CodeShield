@@ -1,37 +1,24 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.jsx';
+import CodeShieldLogo from '../components/CodeShieldLogo.jsx';
 
 export default function LandingPage() {
   const { user } = useAuth();
 
   return (
-    <div className="page-container" style={{ textAlign: 'center', paddingTop: '80px' }}>
+    <div className="page-container" style={{ textAlign: 'center', paddingTop: '60px' }}>
       <div className="slide-up">
-        <div style={{ marginBottom: '24px' }}>
-          <svg width="72" height="72" viewBox="0 0 32 32" fill="none" style={{ margin: '0 auto' }}>
-            <rect width="32" height="32" rx="8" fill="url(#gradLanding)" />
-            <path d="M10 16L14 20L22 12" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-            <defs>
-              <linearGradient id="gradLanding" x1="0" y1="0" x2="32" y2="32">
-                <stop stopColor="#6366f1" />
-                <stop offset="1" stopColor="#06b6d4" />
-              </linearGradient>
-            </defs>
-          </svg>
+        <div style={{ marginBottom: '24px', display: 'flex', justifyContent: 'center' }}>
+          <CodeShieldLogo
+            size={72}
+            showText={true}
+            showSubtitle={true}
+            textColor="#ffffff"
+            subtitleColor="#94a3b8"
+          />
         </div>
 
-        <h1 style={{
-          fontSize: '3.5rem',
-          fontWeight: 800,
-          background: 'linear-gradient(135deg, #f1f5f9, #818cf8)',
-          WebkitBackgroundClip: 'text',
-          WebkitTextFillColor: 'transparent',
-          marginBottom: '16px',
-          lineHeight: 1.2,
-        }}>
-          CodeGuard
-        </h1>
         <p style={{
           fontSize: '1.25rem',
           color: 'var(--cg-text-muted)',
