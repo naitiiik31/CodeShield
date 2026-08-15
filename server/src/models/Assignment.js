@@ -44,6 +44,14 @@ const assignmentSchema = new mongoose.Schema({
     default: 'idle',
   },
   analysisError: String,
+  analysisStats: {
+    submissionsFound: { type: Number, default: 0 },
+    possiblePairs: { type: Number, default: 0 },
+    candidatePairs: { type: Number, default: 0 },
+    analyzedPairs: { type: Number, default: 0 },
+    resultsSaved: { type: Number, default: 0 },
+    candidateReduction: { type: Number, default: 0 },
+  },
   assignmentCode: {
     type: String,
     required: [true, 'Assignment code is required'],

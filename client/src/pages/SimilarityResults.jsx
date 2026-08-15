@@ -17,6 +17,8 @@ function formatRankDisplay(rank) {
 export default function SimilarityResults() {
   const { id } = useParams();
   const [results, setResults] = useState([]);
+  const [clusters, setClusters] = useState([]);
+  const [expandedClusters, setExpandedClusters] = useState(new Set());
   const [analytics, setAnalytics] = useState(null);
   const [loading, setLoading] = useState(true);
   const [analyzing, setAnalyzing] = useState(false);
@@ -29,14 +31,27 @@ export default function SimilarityResults() {
 
   const fetchResults = async () => {
     try {
-      const res = await api.get(`/assignments/${id}/results`);
-      setResults(res.data.results || []);
-      setAnalytics(res.data.analytics || null);
+      const [resResults, resClusters] = await Promise.all([
+        api.get(`/assignments/${id}/results`),
+        api.get(`/assignments/${id}/clusters`).catch(() => ({ data: { clusters: [] } })),
+      ]);
+      setResults(resResults.data.results || []);
+      setAnalytics(resResults.data.analytics || null);
+      setClusters(resClusters.data.clusters || []);
     } catch (err) {
       console.error('Failed to fetch results:', err);
     } finally {
       setLoading(false);
     }
+  };
+
+  const toggleClusterExpand = (clusterId) => {
+    setExpandedClusters((prev) => {
+      const next = new Set(prev);
+      if (next.has(clusterId)) next.delete(clusterId);
+      else next.add(clusterId);
+      return next;
+    });
   };
 
   const handleTriggerAnalysis = async () => {
@@ -189,6 +204,138 @@ export default function SimilarityResults() {
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
+          </div>
+        </div>
+      )}
+
+      {/* Suspicious Clusters Panel */}
+      {clusters.length > 0 && (
+        <div style={{ marginBottom: '32px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+            <h2 style={{ fontSize: '1.25rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px' }}>
+              👥 Suspicious Clusters ({clusters.length})
+            </h2>
+            <span style={{ fontSize: '0.85rem', color: 'var(--cg-text-muted)' }}>
+              Union-Find grouped clusters of mutually similar submissions
+            </span>
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            {clusters.map((c, idx) => {
+              const clusterKey = c.id || idx;
+              const isExpanded = expandedClusters.has(clusterKey);
+              const avgPct = (c.averageSimilarity * 100).toFixed(1);
+              const maxPct = (c.maxSimilarity * 100).toFixed(1);
+
+              return (
+                <div
+                  key={clusterKey}
+                  className="glass-card"
+                  style={{
+                    padding: '20px',
+                    borderColor: c.maxSimilarity >= 0.7 ? 'rgba(239, 68, 68, 0.4)' : 'rgba(245, 158, 11, 0.4)',
+                    background: 'rgba(30, 41, 59, 0.6)',
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '16px' }}>
+                    <div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px', flexWrap: 'wrap' }}>
+                        <span style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--cg-text)' }}>
+                          Cluster #{idx + 1}
+                        </span>
+                        <span className="badge badge-high" style={{ fontSize: '0.8rem' }}>
+                          {c.size} Students Grouped
+                        </span>
+                        {c.submittedWithinMinutes !== null && c.submittedWithinMinutes !== undefined && (
+                          <span style={{ fontSize: '0.8rem', color: 'var(--cg-text-muted)', background: 'var(--cg-bg)', padding: '2px 8px', borderRadius: '12px' }}>
+                            ⏱ Submissions within {c.submittedWithinMinutes} mins
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Student Chips */}
+                      <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginTop: '8px' }}>
+                        {(c.studentNames || c.studentIdentifiers || []).map((name, sIdx) => (
+                          <span
+                            key={sIdx}
+                            style={{
+                              padding: '4px 12px',
+                              background: 'rgba(99, 102, 241, 0.12)',
+                              border: '1px solid rgba(99, 102, 241, 0.25)',
+                              borderRadius: '16px',
+                              fontSize: '0.85rem',
+                              fontWeight: 600,
+                              color: 'var(--cg-primary-light)',
+                            }}
+                          >
+                            👤 {name}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '20px', flexWrap: 'wrap' }}>
+                      <div style={{ textAlign: 'right' }}>
+                        <div style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--cg-accent)' }}>
+                          {avgPct}%
+                        </div>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--cg-text-muted)' }}>Avg Similarity</div>
+                      </div>
+                      <div style={{ textAlign: 'right' }}>
+                        <div style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--cg-danger)' }}>
+                          {maxPct}%
+                        </div>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--cg-text-muted)' }}>Max Pair Similarity</div>
+                      </div>
+
+                      <div style={{ display: 'flex', gap: '8px' }}>
+                        <button
+                          onClick={() => toggleClusterExpand(clusterKey)}
+                          className="btn btn-sm btn-secondary"
+                        >
+                          {isExpanded ? 'Hide Details' : 'View Cluster'}
+                        </button>
+
+                        {(c.highestPairResultId || c.highestPair?.resultId) && (
+                          <Link
+                            to={`/results/${c.highestPairResultId || c.highestPair?.resultId}`}
+                            className="btn btn-sm btn-primary"
+                          >
+                            Compare Peak Pair →
+                          </Link>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Expanded Cluster Details */}
+                  {isExpanded && (
+                    <div style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px solid var(--cg-border)' }}>
+                      <h4 style={{ fontSize: '0.9rem', fontWeight: 600, marginBottom: '10px', color: 'var(--cg-text-muted)' }}>
+                        Cluster Members & Submissions ({c.size}):
+                      </h4>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '10px' }}>
+                        {(c.students || []).map((st, stIdx) => (
+                          <div
+                            key={stIdx}
+                            style={{
+                              padding: '10px 14px',
+                              background: 'var(--cg-bg)',
+                              borderRadius: '8px',
+                              border: '1px solid var(--cg-border)',
+                              fontSize: '0.85rem',
+                            }}
+                          >
+                            <div style={{ fontWeight: 600, color: 'var(--cg-text)' }}>{st.studentName || st.studentIdentifier}</div>
+                            <div style={{ fontSize: '0.75rem', color: 'var(--cg-text-muted)' }}>ID: {st.studentIdentifier}</div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </div>
       )}

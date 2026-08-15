@@ -79,53 +79,7 @@ export default function LandingPage() {
           </Link>
         </div>
 
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
-          gap: '20px',
-          maxWidth: '1000px',
-          margin: '0 auto',
-          textAlign: 'left',
-        }}>
-          {[
-            {
-              icon: '⚙️',
-              title: 'Unified Normalized Token Pipeline',
-              desc: 'Language-specific tokenizers map Python, JS, Java, C++, C, & C# into canonical token streams (VAR, NUM, IF, FOR, OPERATOR) before fingerprinting.',
-            },
-            {
-              icon: '🔬',
-              title: 'Winnowing Fingerprinting',
-              desc: 'Industry-standard document fingerprinting using k-gram hashing and the winnowing algorithm for robust similarity detection.',
-            },
-            {
-              icon: '🧹',
-              title: 'Boilerplate-Aware',
-              desc: 'Automatically detects and down-weights professor-provided starter code to eliminate false positives.',
-            },
-            {
-              icon: '📊',
-              title: 'Explainable Reports',
-              desc: 'Every similarity score comes with evidence-based explanations — matched regions, structural analysis, and metrics.',
-            },
-            {
-              icon: '🤖',
-              title: 'Optional AI Analysis',
-              desc: 'AI semantic similarity as an advisory signal for borderline cases. The professor remains the final decision-maker.',
-            },
-            {
-              icon: '⚡',
-              title: 'Inverted Index Optimization',
-              desc: 'Eliminates unnecessary comparisons using hash-based candidate generation instead of naive O(N²) pairing.',
-            },
-          ].map((feature, i) => (
-            <div key={i} className="glass-card" style={{ animationDelay: `${i * 0.1}s` }}>
-              <div style={{ fontSize: '2rem', marginBottom: '12px' }}>{feature.icon}</div>
-              <h3 style={{ fontSize: '1.05rem', fontWeight: 600, marginBottom: '8px' }}>{feature.title}</h3>
-              <p style={{ fontSize: '0.85rem', color: 'var(--cg-text-muted)', lineHeight: 1.6 }}>{feature.desc}</p>
-            </div>
-          ))}
-        </div>
+
       </div>
     </div>
   );

@@ -101,12 +101,14 @@ export async function processAssignmentAnalysis(assignmentId, updateProgress = (
       );
     }
 
-    const pairs = generateAllUniquePairs(subData);
-    const naivePairCount = pairs.length;
-    const candidatePairCount = pairs.length;
+    const candidateResult = findCandidatePairs(subData);
+    const pairs = candidateResult.pairs || [];
+    const naivePairCount = candidateResult.naivePairCount;
+    const candidatePairCount = candidateResult.candidatePairCount;
+    const reductionPercentage = parseFloat(candidateResult.reductionPercentage);
 
     console.log(
-      `  Naive pairs: ${naivePairCount}, Unique pairs to analyze: ${candidatePairCount}`
+      `[Analysis] Submissions: ${submissions.length}, Naive pairs: ${naivePairCount}, Candidate pairs: ${candidatePairCount}, Reduction: ${reductionPercentage}%`
     );
 
     await SimilarityResult.deleteMany({ assignmentId });
@@ -212,17 +214,28 @@ export async function processAssignmentAnalysis(assignmentId, updateProgress = (
     }
 
     assignment.analysisStatus = 'completed';
+    assignment.analysisStats = {
+      submissionsFound: submissions.length,
+      possiblePairs: naivePairCount,
+      candidatePairs: candidatePairCount,
+      analyzedPairs: processedCount,
+      resultsSaved: processedCount,
+      candidateReduction: reductionPercentage,
+    };
     await assignment.save();
 
     console.log(
-      `Analysis complete for assignment ${assignmentId}: ${processedCount} pairs analyzed`
+      `Analysis complete for assignment ${assignmentId}: ${processedCount} candidate pairs analyzed`
     );
 
     return {
       assignmentId,
-      pairsAnalyzed: processedCount,
-      naivePairCount,
-      candidatePairCount,
+      submissionsFound: submissions.length,
+      possiblePairs: naivePairCount,
+      candidatePairs: candidatePairCount,
+      analyzedPairs: processedCount,
+      resultsSaved: processedCount,
+      candidateReduction: reductionPercentage,
     };
   } catch (error) {
     assignment.analysisStatus = 'failed';

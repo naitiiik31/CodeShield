@@ -164,7 +164,7 @@ export default function StudentDashboard() {
           <div style={{ textAlign: 'right' }}>
             <div style={{ fontSize: '0.85rem', color: 'var(--cg-text-muted)' }}>Available Assignments</div>
             <div style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--cg-accent)' }}>
-              {allAssignments.length} Assignment{allAssignments.length !== 1 ? 's' : ''} Available
+              {stats.pendingCount} Assignment{stats.pendingCount !== 1 ? 's' : ''} Available
             </div>
           </div>
         </div>

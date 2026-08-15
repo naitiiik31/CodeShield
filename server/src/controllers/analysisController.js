@@ -8,6 +8,11 @@ import { mapMatchedRegions } from '../services/explanation/regionMapper.js';
 import { generateExplanation } from '../services/explanation/generator.js';
 import { getAnalysisQueue } from '../queues/index.js';
 import { processAssignmentAnalysis } from '../workers/analysisWorker.js';
+import { findCandidatePairs } from '../services/similarity/candidateGenerator.js';
+import { tokenize } from '../services/tokenizer/index.js';
+import { determineRiskLevel } from '../services/explanation/generator.js';
+import { computeCodeDiff } from '../services/diff/diffEngine.js';
+import { detectClusters } from '../services/similarity/clusterDetector.js';
 import { inMemoryResults, inMemorySubmissions } from '../services/inMemoryStore.js';
 
 export function processInMemoryAnalysis(assignmentId) {
@@ -51,7 +56,8 @@ export function processInMemoryAnalysis(assignmentId) {
   }
 
   const subData = latestSubmissions.map((s) => ({ id: s._id.toString(), fingerprints: (s.fingerprints || []).map((f) => f.hash) }));
-  const pairs = generateAllUniquePairs(subData);
+  const candidateResult = findCandidatePairs(subData);
+  const pairs = candidateResult.pairs || [];
   const subMap = new Map(latestSubmissions.map((s) => [s._id.toString(), s]));
 
   for (const p of pairs) {
@@ -173,6 +179,7 @@ export async function getAnalysisStatus(req, res) {
         totalSubmissions,
         fingerprintedSubmissions,
         resultCount,
+        analysisStats: assignment?.analysisStats || null,
       });
       return;
     }
@@ -302,15 +309,25 @@ export async function getResultDetail(req, res) {
         }
         const submissionA = await Submission.findById(result.submissionA);
         const submissionB = await Submission.findById(result.submissionB);
+        const codeA = submissionA?.code || '';
+        const codeB = submissionB?.code || '';
+        const language = submissionA?.language || assignment?.languageAllowed || 'python';
+
+        let diffData = null;
+        if (codeA && codeB) {
+          diffData = computeCodeDiff(codeA, codeB, language);
+        }
+
         res.json({
           ...result.toJSON(),
           studentA: { name: result.studentNameA || result.studentIdentifierA, email: result.studentIdentifierA },
           studentB: { name: result.studentNameB || result.studentIdentifierB, email: result.studentIdentifierB },
-          codeA: submissionA?.code || '',
-          codeB: submissionB?.code || '',
+          codeA,
+          codeB,
           fileNameA: submissionA?.fileName || 'submission_a',
           fileNameB: submissionB?.fileName || 'submission_b',
-          language: submissionA?.language || 'python',
+          language,
+          diff: diffData,
         });
         return;
       }
@@ -320,13 +337,22 @@ export async function getResultDetail(req, res) {
     const subA = inMemorySubmissions.find((s) => s._id.toString() === result.submissionA) || inMemorySubmissions[0];
     const subB = inMemorySubmissions.find((s) => s._id.toString() === result.submissionB) || inMemorySubmissions[1];
 
+    const codeA = subA?.code || '';
+    const codeB = subB?.code || '';
+    const language = subA?.language || 'python';
+    let diffData = null;
+    if (codeA && codeB) {
+      diffData = computeCodeDiff(codeA, codeB, language);
+    }
+
     res.json({
       ...result,
-      codeA: subA.code,
-      codeB: subB.code,
-      fileNameA: subA.fileName,
-      fileNameB: subB.fileName,
-      language: subA.language,
+      codeA,
+      codeB,
+      fileNameA: subA?.fileName || 'submission_a',
+      fileNameB: subB?.fileName || 'submission_b',
+      language,
+      diff: diffData,
     });
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch result detail' });
@@ -391,3 +417,75 @@ export async function algorithmDemo(req, res) {
     res.status(500).json({ error: 'Algorithm demo failed: ' + error.message });
   }
 }
+
+export async function getAssignmentClusters(req, res) {
+  try {
+    const { id } = req.params;
+
+    if (req.user?.role === 'student') {
+      res.status(403).json({ error: 'Access denied: Students are not permitted to view plagiarism clusters' });
+      return;
+    }
+
+    let rawResults = [];
+    const submissionsById = new Map();
+    let threshold = 0.5;
+
+    if (mongoose.connection.readyState === 1) {
+      const assignment = await Assignment.findById(id);
+      if (!assignment) {
+        res.status(404).json({ error: 'Assignment not found' });
+        return;
+      }
+
+      if (assignment.professorId && req.user._id && assignment.professorId.toString() !== req.user._id.toString()) {
+        res.status(403).json({ error: 'Access denied: You do not own this assignment' });
+        return;
+      }
+
+      threshold = assignment.similarityThreshold || 0.5;
+      rawResults = await SimilarityResult.find({ assignmentId: id }).sort({ rawScore: -1, adjustedScore: -1 });
+
+      const submissions = await Submission.find({ assignmentId: id });
+      for (const sub of submissions) {
+        submissionsById.set(sub._id.toString(), {
+          id: sub._id.toString(),
+          studentIdentifier: sub.studentIdentifier,
+          studentName: sub.studentName || sub.studentIdentifier,
+          submittedAt: sub.submittedAt || sub.createdAt,
+        });
+      }
+    } else {
+      rawResults = inMemoryResults.filter(
+        (r) =>
+          r.assignmentId?._id?.toString() === id ||
+          r.assignmentId?.toString() === id ||
+          r.assignmentId === id
+      );
+
+      const subs = inMemorySubmissions.filter(
+        (s) =>
+          s.assignmentId?._id?.toString() === id ||
+          s.assignmentId?.toString() === id ||
+          s.assignmentId === id
+      );
+
+      for (const sub of subs) {
+        submissionsById.set(sub._id.toString(), {
+          id: sub._id.toString(),
+          studentIdentifier: sub.studentIdentifier || sub.studentUserId,
+          studentName: sub.studentName || sub.studentIdentifier || sub.studentUserId,
+          submittedAt: sub.submittedAt || sub.createdAt,
+        });
+      }
+    }
+
+    const clusters = detectClusters(rawResults, submissionsById, threshold);
+
+    res.json({ clusters });
+  } catch (error) {
+    console.error('Fetch assignment clusters error:', error);
+    res.status(500).json({ error: 'Failed to fetch assignment clusters' });
+  }
+}
+
