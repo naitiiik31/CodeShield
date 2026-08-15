@@ -16,12 +16,12 @@ export function getRedisConnection() {
     });
 
     redisConnection.on('connect', () => {
-      console.log('✅ Redis connected successfully');
+      console.log('Redis connected successfully');
     });
 
     redisConnection.on('error', (err) => {
       if (err.message.includes('ECONNREFUSED')) {
-        console.warn('⚠️ Redis offline (BullMQ will use synchronous fallback)');
+        console.warn('Redis offline (BullMQ will use synchronous fallback)');
       } else {
         console.error('Redis error:', err.message);
       }

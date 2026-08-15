@@ -20,10 +20,21 @@ const userSchema = new mongoose.Schema({
     type: String,
     required: true,
   },
+  studentId: {
+    type: String,
+    trim: true,
+    sparse: true,
+    unique: true,
+  },
   role: {
     type: String,
-    enum: ['faculty', 'professor'],
+    enum: ['faculty', 'professor', 'student'],
     default: 'faculty',
+  },
+  academicProfile: {
+    department: { type: String, trim: true },
+    division: { type: String, trim: true },
+    batch: { type: String, trim: true },
   },
   createdAt: {
     type: Date,
@@ -32,6 +43,11 @@ const userSchema = new mongoose.Schema({
 });
 
 userSchema.index({ role: 1 });
+userSchema.index({
+  'academicProfile.department': 1,
+  'academicProfile.division': 1,
+  'academicProfile.batch': 1,
+});
 
 userSchema.methods.toJSON = function () {
   const obj = this.toObject();

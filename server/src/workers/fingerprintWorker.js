@@ -44,7 +44,7 @@ export async function processSubmissionFingerprint(submissionId) {
     }
 
     console.log(
-      `✅ Fingerprinted submission ${submissionId} (${submission.studentIdentifier}): ${result.fingerprints.length} fingerprints, ${result.tokenTypes.length} tokens`
+      `[Fingerprinted] submission ${submissionId} (${submission.studentIdentifier}): ${result.fingerprints.length} fingerprints, ${result.tokenTypes.length} tokens`
     );
 
     return {
@@ -65,7 +65,7 @@ export function createFingerprintWorker() {
     'fingerprint-queue',
     async (job) => {
       const { submissionId } = job.data;
-      console.log(`🔍 Processing fingerprint job for submission: ${submissionId}`);
+      console.log(`Processing fingerprint job for submission: ${submissionId}`);
       return await processSubmissionFingerprint(submissionId);
     },
     {

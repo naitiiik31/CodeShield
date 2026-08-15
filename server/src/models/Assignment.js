@@ -44,6 +44,52 @@ const assignmentSchema = new mongoose.Schema({
     default: 'idle',
   },
   analysisError: String,
+  assignmentCode: {
+    type: String,
+    required: [true, 'Assignment code is required'],
+    unique: true,
+    trim: true,
+    uppercase: true,
+  },
+  targetGroup: {
+    department: {
+      type: String,
+      required: [true, 'Department is required'],
+      trim: true,
+      default: 'CSE',
+    },
+    division: {
+      type: String,
+      required: [true, 'Division is required'],
+      trim: true,
+      default: 'D3',
+    },
+    batch: {
+      type: String,
+      required: [true, 'Batch is required'],
+      trim: true,
+      default: '2023',
+    },
+  },
+  deadlineUpdatedAt: Date,
+  deadlineUpdatedBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+  },
+  deadlineHistory: [
+    {
+      oldDeadline: Date,
+      newDeadline: Date,
+      updatedBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
+      },
+      updatedAt: {
+        type: Date,
+        default: Date.now,
+      },
+    },
+  ],
   createdAt: {
     type: Date,
     default: Date.now,
@@ -51,5 +97,10 @@ const assignmentSchema = new mongoose.Schema({
 });
 
 assignmentSchema.index({ professorId: 1 });
+assignmentSchema.index({
+  'targetGroup.department': 1,
+  'targetGroup.division': 1,
+  'targetGroup.batch': 1,
+});
 
 export const Assignment = mongoose.model('Assignment', assignmentSchema);

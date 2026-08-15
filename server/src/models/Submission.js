@@ -59,6 +59,14 @@ const submissionSchema = new mongoose.Schema({
     type: [fingerprintSchema],
     default: [],
   },
+  studentUserId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+  },
+  isLatest: {
+    type: Boolean,
+    default: true,
+  },
   submittedAt: {
     type: Date,
     default: Date.now,
@@ -67,7 +75,9 @@ const submissionSchema = new mongoose.Schema({
 
 submissionSchema.index({ assignmentId: 1 });
 submissionSchema.index({ studentIdentifier: 1 });
+submissionSchema.index({ studentUserId: 1 });
 submissionSchema.index({ assignmentId: 1, studentIdentifier: 1 });
+submissionSchema.index({ assignmentId: 1, isLatest: 1 });
 submissionSchema.index({ status: 1 });
 
 export const Submission = mongoose.model('Submission', submissionSchema);

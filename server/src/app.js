@@ -10,6 +10,7 @@ import authRoutes from './routes/auth.js';
 import assignmentRoutes from './routes/assignments.js';
 import submissionRoutes from './routes/submissions.js';
 import analysisRoutes from './routes/analysis.js';
+import studentRoutes from './routes/student.js';
 
 const app = express();
 
@@ -19,8 +20,9 @@ app.use(cors());
 app.use(
   rateLimit({
     windowMs: config.rateLimitWindowMs,
-    max: config.rateLimitMax,
+    max: config.nodeEnv === 'production' ? config.rateLimitMax : 10000,
     message: { error: 'Too many requests, please try again later' },
+    skip: () => config.nodeEnv !== 'production',
   })
 );
 
@@ -42,6 +44,7 @@ app.get('/api/health', (_req, res) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/assignments', assignmentRoutes);
 app.use('/api/submissions', submissionRoutes);
+app.use('/api/student', studentRoutes);
 app.use('/api', analysisRoutes);
 
 app.use(errorHandler);
@@ -50,7 +53,7 @@ async function start() {
   await connectDatabase();
   await ensureDemoDataSeeded();
   app.listen(config.port, () => {
-    console.log(`🚀 CodeGuard API server running on port ${config.port}`);
+    console.log(`CodeGuard API server running on port ${config.port}`);
     console.log(`   Environment: ${config.nodeEnv}`);
   });
 }

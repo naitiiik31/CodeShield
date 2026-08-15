@@ -20,6 +20,12 @@ describe('Jaccard Similarity', () => {
     expect(result.score).toBeCloseTo(2 / 6);
     expect(result.matchedCount).toBe(2);
   });
+
+  it('should handle empty sets gracefully without NaN', () => {
+    const result = jaccardSimilarity([], []);
+    expect(result.score).toBe(0);
+    expect(isNaN(result.score)).toBe(false);
+  });
 });
 
 describe('Containment Similarity', () => {
@@ -28,22 +34,35 @@ describe('Containment Similarity', () => {
   });
 });
 
-describe('Inverted Index & Candidate Generator', () => {
-  it('should build correct inverted index and candidates for N*(N-1)/2 unique pairs', () => {
+describe('Inverted Index & Candidate Generator Reduction', () => {
+  it('should build inverted index and perform candidate pair reduction', () => {
     const submissions = [
       { id: 'A', fingerprints: [1, 2, 3] },
       { id: 'B', fingerprints: [2, 3, 4] },
-      { id: 'C', fingerprints: [5, 6, 7] },
+      { id: 'C', fingerprints: [100, 101, 102] },
+    ];
+    const { naivePairCount, candidatePairCount, pairs } = findCandidatePairs(submissions);
+
+    expect(naivePairCount).toBe(3); // 3*(3-1)/2
+    expect(candidatePairCount).toBe(1); // Only A-B share fingerprints (2,3)
+    expect(candidatePairCount).toBeLessThan(naivePairCount);
+    expect(pairs[0].submissionA).toBe('A');
+    expect(pairs[0].submissionB).toBe('B');
+  });
+
+  it('should correctly include all pairs sharing fingerprints without duplicates', () => {
+    const submissions = [
+      { id: 'A', fingerprints: [1, 2] },
+      { id: 'B', fingerprints: [2, 3] },
+      { id: 'C', fingerprints: [3, 4] },
     ];
     const { naivePairCount, candidatePairCount, pairs } = findCandidatePairs(submissions);
 
     expect(naivePairCount).toBe(3);
-    expect(candidatePairCount).toBe(3);
-    expect(pairs[0].submissionA).toBe('A');
-    expect(pairs[0].submissionB).toBe('B');
-    expect(pairs[1].submissionA).toBe('A');
-    expect(pairs[1].submissionB).toBe('C');
-    expect(pairs[2].submissionA).toBe('B');
-    expect(pairs[2].submissionB).toBe('C');
+    expect(candidatePairCount).toBe(2); // A-B (hash 2) and B-C (hash 3)
+    const pairKeys = pairs.map((p) => `${p.submissionA}::${p.submissionB}`);
+    expect(pairKeys).toContain('A::B');
+    expect(pairKeys).toContain('B::C');
+    expect(pairKeys).not.toContain('A::C');
   });
 });

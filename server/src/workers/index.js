@@ -3,19 +3,19 @@ import { createFingerprintWorker } from './fingerprintWorker.js';
 import { createAnalysisWorker } from './analysisWorker.js';
 
 async function startWorkers() {
-  console.log('🚀 Starting CodeGuard workers...');
+  console.log('Starting CodeGuard workers...');
 
   await connectDatabase();
 
   const fpWorker = createFingerprintWorker();
   const analysisWorker = createAnalysisWorker();
 
-  console.log('✅ Workers started:');
+  console.log('Workers started:');
   console.log('  - Fingerprint worker (fingerprint-queue)');
   console.log('  - Analysis worker (analysis-queue)');
 
   const shutdown = async () => {
-    console.log('\n⏳ Shutting down workers...');
+    console.log('\nShutting down workers...');
     await fpWorker.close();
     await analysisWorker.close();
     console.log('Workers stopped.');

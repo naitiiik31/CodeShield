@@ -4,7 +4,7 @@ import { Assignment } from '../models/Assignment.js';
 import { Submission } from '../models/Submission.js';
 import { SimilarityResult } from '../models/SimilarityResult.js';
 import { BoilerplateFingerprint } from '../models/BoilerplateFingerprint.js';
-import { findCandidatePairs } from '../services/similarity/candidateGenerator.js';
+import { findCandidatePairs, generateAllUniquePairs } from '../services/similarity/candidateGenerator.js';
 import { jaccardSimilarity } from '../services/similarity/jaccard.js';
 import {
   detectBoilerplate,
@@ -20,7 +20,7 @@ import { tokenize } from '../services/tokenizer/index.js';
 import { createAIProvider } from '../services/ai/index.js';
 
 export async function processAssignmentAnalysis(assignmentId, updateProgress = () => {}) {
-  console.log(`📊 Processing analysis job for assignment: ${assignmentId}`);
+  console.log(`Processing analysis job for assignment: ${assignmentId}`);
 
   const assignment = await Assignment.findById(assignmentId);
   if (!assignment) {
@@ -31,10 +31,36 @@ export async function processAssignmentAnalysis(assignmentId, updateProgress = (
   await assignment.save();
 
   try {
-    const submissions = await Submission.find({
+    let allSubmissions = await Submission.find({
+      assignmentId,
+    }).sort({ version: -1, submittedAt: -1 });
+
+    // Auto-fingerprint any pending/un-fingerprinted submissions before analysis
+    for (const sub of allSubmissions) {
+      if (sub.status !== 'fingerprinted' || !sub.fingerprints || sub.fingerprints.length === 0) {
+        console.log(`[Analysis] Auto-fingerprinting pending submission ${sub._id} (${sub.studentIdentifier})...`);
+        try {
+          await processSubmissionFingerprint(sub._id.toString());
+        } catch (fpErr) {
+          console.error(`[Analysis] Auto-fingerprint error for ${sub._id}:`, fpErr);
+        }
+      }
+    }
+
+    // Re-fetch fingerprinted submissions
+    allSubmissions = await Submission.find({
       assignmentId,
       status: 'fingerprinted',
-    });
+    }).sort({ version: -1, submittedAt: -1 });
+
+    const latestMap = new Map();
+    for (const sub of allSubmissions) {
+      if (!latestMap.has(sub.studentIdentifier)) {
+        latestMap.set(sub.studentIdentifier, sub);
+      }
+    }
+
+    const submissions = Array.from(latestMap.values());
 
     if (submissions.length < 2) {
       assignment.analysisStatus = 'completed';
@@ -75,7 +101,9 @@ export async function processAssignmentAnalysis(assignmentId, updateProgress = (
       );
     }
 
-    const { pairs, naivePairCount, candidatePairCount } = findCandidatePairs(subData);
+    const pairs = generateAllUniquePairs(subData);
+    const naivePairCount = pairs.length;
+    const candidatePairCount = pairs.length;
 
     console.log(
       `  Naive pairs: ${naivePairCount}, Unique pairs to analyze: ${candidatePairCount}`
@@ -132,7 +160,7 @@ export async function processAssignmentAnalysis(assignmentId, updateProgress = (
       });
 
       const riskLevel = determineRiskLevel(
-        adjusted.adjustedScore,
+        adjusted.rawScore,
         assignment.similarityThreshold
       );
 
@@ -187,7 +215,7 @@ export async function processAssignmentAnalysis(assignmentId, updateProgress = (
     await assignment.save();
 
     console.log(
-      `✅ Analysis complete for assignment ${assignmentId}: ${processedCount} pairs analyzed`
+      `Analysis complete for assignment ${assignmentId}: ${processedCount} pairs analyzed`
     );
 
     return {

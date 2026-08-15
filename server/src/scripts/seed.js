@@ -257,18 +257,7 @@ async function seed() {
     role: 'professor',
   });
 
-  const students = await User.create([
-    { name: 'Alice Johnson', email: 'alice@student.dev', passwordHash, role: 'student' },
-    { name: 'Bob Smith', email: 'bob@student.dev', passwordHash, role: 'student' },
-    { name: 'Charlie Brown', email: 'charlie@student.dev', passwordHash, role: 'student' },
-    { name: 'Diana Prince', email: 'diana@student.dev', passwordHash, role: 'student' },
-    { name: 'Eve Davis', email: 'eve@student.dev', passwordHash, role: 'student' },
-    { name: 'Frank Miller', email: 'frank@student.dev', passwordHash, role: 'student' },
-    { name: 'Grace Lee', email: 'grace@student.dev', passwordHash, role: 'student' },
-    { name: 'Henry Wilson', email: 'henry@student.dev', passwordHash, role: 'student' },
-  ]);
-
-  console.log(`  Created 1 professor and ${students.length} students`);
+  console.log(`  Created 1 professor account (Faculty-only system)`);
 
   const assignment1 = await Assignment.create({
     title: 'Sorting Algorithm Implementation',
@@ -386,12 +375,7 @@ async function seed() {
   console.log('\n  Running similarity analysis for Assignment 2...');
   await runAnalysis(assignment2, subs2);
 
-  console.log('\n✅ Seed complete!');
-  console.log('\n📋 Login credentials:');
-  console.log('  Professor: professor@codeguard.dev / password123');
-  console.log('  Student:   alice@student.dev / password123');
-  console.log('             bob@student.dev / password123');
-  console.log('             (all students use password123)');
+  console.log('  Faculty: professor@codeguard.dev / password123');
 
   await mongoose.disconnect();
   process.exit(0);

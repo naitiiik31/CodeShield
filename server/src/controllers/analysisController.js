@@ -10,14 +10,116 @@ import { getAnalysisQueue } from '../queues/index.js';
 import { processAssignmentAnalysis } from '../workers/analysisWorker.js';
 import { inMemoryResults, inMemorySubmissions } from '../services/inMemoryStore.js';
 
+export function processInMemoryAnalysis(assignmentId) {
+  const subs = inMemorySubmissions.filter(
+    (s) =>
+      s.assignmentId?._id?.toString() === assignmentId ||
+      s.assignmentId?.toString() === assignmentId ||
+      s.assignmentId === assignmentId
+  );
+
+  const latestMap = new Map();
+  subs.sort((a, b) => (b.version || 1) - (a.version || 1));
+  for (const s of subs) {
+    const key = s.studentIdentifier || s.studentUserId;
+    if (!latestMap.has(key)) {
+      latestMap.set(key, s);
+    }
+  }
+
+  const latestSubmissions = Array.from(latestMap.values());
+  if (latestSubmissions.length < 2) return;
+
+  for (const s of latestSubmissions) {
+    if (!s.fingerprints || s.fingerprints.length === 0) {
+      const res = generateFingerprints(s.code || '', s.language || 'python');
+      s.fingerprints = res.fingerprints.map((fp) => ({
+        hash: fp.hash,
+        position: fp.position,
+        startLine: fp.startLine,
+        endLine: fp.endLine,
+      }));
+      s.tokens = res.tokenTypes;
+      s.status = 'fingerprinted';
+    }
+  }
+
+  for (let i = inMemoryResults.length - 1; i >= 0; i--) {
+    if (inMemoryResults[i].assignmentId?.toString() === assignmentId) {
+      inMemoryResults.splice(i, 1);
+    }
+  }
+
+  const subData = latestSubmissions.map((s) => ({ id: s._id.toString(), fingerprints: (s.fingerprints || []).map((f) => f.hash) }));
+  const pairs = generateAllUniquePairs(subData);
+  const subMap = new Map(latestSubmissions.map((s) => [s._id.toString(), s]));
+
+  for (const p of pairs) {
+    const sA = subMap.get(p.submissionA);
+    const sB = subMap.get(p.submissionB);
+    if (!sA || !sB) continue;
+
+    const fpA = (sA.fingerprints || []).map((f) => f.hash);
+    const fpB = (sB.fingerprints || []).map((f) => f.hash);
+
+    const jaccard = jaccardSimilarity(fpA, fpB);
+    const riskLevel = determineRiskLevel(jaccard.score, 0.5);
+
+    const tokensA = tokenize(sA.code || '', sA.language || 'python');
+    const tokensB = tokenize(sB.code || '', sB.language || 'python');
+
+    const matchedRegions = mapMatchedRegions(jaccard.intersection, sA.fingerprints || [], sB.fingerprints || [], tokensA, tokensB, 5);
+    const explanation = generateExplanation({
+      rawScore: jaccard.score,
+      adjustedScore: jaccard.score,
+      boilerplateOverlap: 0,
+      matchedRegions,
+      nonBoilerplateMatches: jaccard.intersection,
+      tokensA,
+      tokensB,
+      totalFingerprintsA: fpA.length,
+      totalFingerprintsB: fpB.length,
+    });
+
+    inMemoryResults.push({
+      _id: '65r' + Date.now().toString(16).padStart(21, '0'),
+      assignmentId,
+      submissionA: sA._id,
+      submissionB: sB._id,
+      studentIdentifierA: sA.studentIdentifier,
+      studentNameA: sA.studentName || sA.studentIdentifier,
+      studentIdentifierB: sB.studentIdentifier,
+      studentNameB: sB.studentName || sB.studentIdentifier,
+      rawScore: jaccard.score,
+      adjustedScore: jaccard.score,
+      matchedHashes: jaccard.intersection,
+      matchedRegions,
+      boilerplateOverlap: 0,
+      explanation,
+      riskLevel,
+      createdAt: new Date(),
+    });
+  }
+}
+
 export async function triggerAnalysis(req, res) {
   try {
     const { id } = req.params;
+
+    if (req.user?.role === 'student') {
+      res.status(403).json({ error: 'Access denied: Students are not permitted to run analysis' });
+      return;
+    }
 
     if (mongoose.connection.readyState === 1) {
       const assignment = await Assignment.findById(id);
       if (!assignment) {
         res.status(404).json({ error: 'Assignment not found' });
+        return;
+      }
+
+      if (assignment.professorId && req.user._id && assignment.professorId.toString() !== req.user._id.toString()) {
+        res.status(403).json({ error: 'Access denied: You do not own this assignment' });
         return;
       }
 
@@ -47,6 +149,8 @@ export async function triggerAnalysis(req, res) {
       return;
     }
 
+    // In-memory fallback mode
+    processInMemoryAnalysis(id);
     res.json({ message: 'Analysis completed', status: 'completed' });
   } catch (error) {
     console.error('Trigger analysis error:', error);
@@ -87,74 +191,115 @@ export async function getAnalysisStatus(req, res) {
 
 export async function getResults(req, res) {
   try {
-    if (mongoose.connection.readyState === 1) {
-      const results = await SimilarityResult.find({ assignmentId: req.params.id })
-        .sort({ adjustedScore: -1 });
-
-      if (results.length > 0) {
-        const scores = results.map((r) => r.adjustedScore);
-        const avgSimilarity = scores.reduce((a, b) => a + b, 0) / scores.length;
-        const highRiskCount = results.filter((r) => r.riskLevel === 'high').length;
-        const mediumRiskCount = results.filter((r) => r.riskLevel === 'medium').length;
-
-        const distribution = {
-          '0-20': scores.filter((s) => s < 0.2).length,
-          '20-40': scores.filter((s) => s >= 0.2 && s < 0.4).length,
-          '40-60': scores.filter((s) => s >= 0.4 && s < 0.6).length,
-          '60-80': scores.filter((s) => s >= 0.6 && s < 0.8).length,
-          '80-100': scores.filter((s) => s >= 0.8).length,
-        };
-
-        const formattedResults = results.map((r) => ({
-          ...r.toJSON(),
-          studentA: { name: r.studentNameA || r.studentIdentifierA, email: r.studentIdentifierA },
-          studentB: { name: r.studentNameB || r.studentIdentifierB, email: r.studentIdentifierB },
-        }));
-
-        res.json({
-          results: formattedResults,
-          analytics: {
-            totalSubmissions: results.length,
-            totalPairs: results.length,
-            averageSimilarity: avgSimilarity,
-            highRiskPairs: highRiskCount,
-            mediumRiskPairs: mediumRiskCount,
-            distribution,
-            threshold: 0.5,
-          },
-        });
-        return;
-      }
+    if (req.user?.role === 'student') {
+      res.status(403).json({ error: 'Access denied: Students are not permitted to view similarity results' });
+      return;
     }
 
-    const scores = inMemoryResults.map((r) => r.adjustedScore);
-    const avgSimilarity = scores.reduce((a, b) => a + b, 0) / scores.length;
-    const highRiskCount = inMemoryResults.filter((r) => r.riskLevel === 'high').length;
-    const mediumRiskCount = inMemoryResults.filter((r) => r.riskLevel === 'medium').length;
+    let rawResults = [];
+    let totalSubmissionsCount = 0;
+
+    if (mongoose.connection.readyState === 1) {
+      const assignment = await Assignment.findById(req.params.id);
+      if (!assignment) {
+        res.status(404).json({ error: 'Assignment not found' });
+        return;
+      }
+
+      if (assignment.professorId && req.user._id && assignment.professorId.toString() !== req.user._id.toString()) {
+        res.status(403).json({ error: 'Access denied: You do not own this assignment' });
+        return;
+      }
+
+      rawResults = await SimilarityResult.find({ assignmentId: req.params.id })
+        .sort({ rawScore: -1, adjustedScore: -1 });
+      const uniqueStudents = await Submission.distinct('studentIdentifier', { assignmentId: req.params.id });
+      totalSubmissionsCount = uniqueStudents.length;
+    } else {
+      const subs = inMemorySubmissions.filter(
+        (s) =>
+          s.assignmentId?._id?.toString() === req.params.id ||
+          s.assignmentId?.toString() === req.params.id ||
+          s.assignmentId === req.params.id
+      );
+      const uniqueStudents = new Set(subs.map((s) => s.studentIdentifier || s.studentUserId));
+      totalSubmissionsCount = uniqueStudents.size;
+      rawResults = inMemoryResults
+        .filter(
+          (r) =>
+            r.assignmentId?._id?.toString() === req.params.id ||
+            r.assignmentId?.toString() === req.params.id ||
+            r.assignmentId === req.params.id
+        )
+        .sort((a, b) => (b.rawScore || 0) - (a.rawScore || 0));
+    }
+
+    const scores = rawResults.map((r) => r.rawScore || 0);
+    const avgSimilarity = scores.length > 0 ? scores.reduce((a, b) => a + b, 0) / scores.length : 0;
+    const highRiskCount = rawResults.filter((r) => (r.rawScore || 0) >= 0.7).length;
+    const mediumRiskCount = rawResults.filter((r) => (r.rawScore || 0) >= 0.4 && (r.rawScore || 0) < 0.7).length;
+
+    const distribution = {
+      '0-20': scores.filter((s) => s < 0.2).length,
+      '20-40': scores.filter((s) => s >= 0.2 && s < 0.4).length,
+      '40-60': scores.filter((s) => s >= 0.4 && s < 0.6).length,
+      '60-80': scores.filter((s) => s >= 0.6 && s < 0.8).length,
+      '80-100': scores.filter((s) => s >= 0.8).length,
+    };
+
+    let currentRank = 1;
+    const formattedResults = rawResults.map((r, index) => {
+      const obj = typeof r.toJSON === 'function' ? r.toJSON() : r;
+      if (index > 0) {
+        const prev = rawResults[index - 1];
+        const prevScore = Math.round((prev.rawScore || 0) * 1000);
+        const currScore = Math.round((obj.rawScore || 0) * 1000);
+        if (currScore < prevScore) {
+          currentRank = index + 1;
+        }
+      }
+      return {
+        ...obj,
+        rank: currentRank,
+        studentA: { name: obj.studentNameA || obj.studentIdentifierA, email: obj.studentIdentifierA },
+        studentB: { name: obj.studentNameB || obj.studentIdentifierB, email: obj.studentIdentifierB },
+      };
+    });
 
     res.json({
-      results: inMemoryResults,
+      results: formattedResults,
       analytics: {
-        totalSubmissions: inMemorySubmissions.length,
-        totalPairs: inMemoryResults.length,
+        totalSubmissions: totalSubmissionsCount,
+        totalPairs: rawResults.length,
         averageSimilarity: avgSimilarity,
         highRiskPairs: highRiskCount,
         mediumRiskPairs: mediumRiskCount,
-        distribution: { '0-20': 0, '20-40': 0, '40-60': 0, '60-80': 0, '80-100': inMemoryResults.length },
+        distribution,
         threshold: 0.5,
       },
     });
   } catch (error) {
+    console.error('Fetch results error:', error);
     res.status(500).json({ error: 'Failed to fetch results' });
   }
 }
 
 export async function getResultDetail(req, res) {
   try {
+    if (req.user?.role === 'student') {
+      res.status(403).json({ error: 'Access denied: Students are not permitted to view detailed comparison reports' });
+      return;
+    }
+
     if (mongoose.connection.readyState === 1) {
       const result = await SimilarityResult.findById(req.params.id);
 
       if (result) {
+        const assignment = await Assignment.findById(result.assignmentId);
+        if (assignment && assignment.professorId && req.user._id && assignment.professorId.toString() !== req.user._id.toString()) {
+          res.status(403).json({ error: 'Access denied: You do not own this assignment' });
+          return;
+        }
         const submissionA = await Submission.findById(result.submissionA);
         const submissionB = await Submission.findById(result.submissionB);
         res.json({

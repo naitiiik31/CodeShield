@@ -75,19 +75,19 @@ export default function AlgorithmDemo() {
         </p>
       </div>
 
-      {error && <div className="alert alert-error">⚠️ {error}</div>}
+      {error && <div className="alert alert-error">{error}</div>}
 
       <div className="glass-card" style={{ marginBottom: '24px', display: 'flex', gap: '20px', alignItems: 'center', flexWrap: 'wrap' }}>
         <div>
           <label className="form-label" style={{ margin: 0 }}>Target Language</label>
           <select className="form-select" style={{ padding: '6px 12px' }} value={language} onChange={(e) => handleLanguageChange(e.target.value)}>
-            <option value="python">🐍 Python</option>
-            <option value="javascript">🟨 JavaScript</option>
-            <option value="java">☕ Java</option>
-            <option value="cpp">⚡ C++</option>
-            <option value="c">🔵 C</option>
-            <option value="csharp">🟦 C#</option>
-            <option value="auto">✨ Auto Detect</option>
+            <option value="python">Python</option>
+            <option value="javascript">JavaScript</option>
+            <option value="java">Java</option>
+            <option value="cpp">C++</option>
+            <option value="c">C</option>
+            <option value="csharp">C#</option>
+            <option value="auto">Auto Detect</option>
           </select>
         </div>
 

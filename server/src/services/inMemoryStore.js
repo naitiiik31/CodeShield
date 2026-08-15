@@ -14,35 +14,15 @@ export const inMemoryUsers = [
     name: 'Dr. Sarah Chen',
     email: 'professor@codeguard.dev',
     passwordHash: DEMO_PASSWORD_HASH,
-    role: 'professor',
-    createdAt: new Date(),
-    toJSON() {
-      return { _id: this._id, name: this.name, email: this.email, role: this.role, createdAt: this.createdAt };
-    },
-  },
-  {
-    _id: '65c100000000000000000002',
-    name: 'Alice Johnson',
-    email: 'alice@student.dev',
-    passwordHash: DEMO_PASSWORD_HASH,
-    role: 'student',
-    createdAt: new Date(),
-    toJSON() {
-      return { _id: this._id, name: this.name, email: this.email, role: this.role, createdAt: this.createdAt };
-    },
-  },
-  {
-    _id: '65c100000000000000000003',
-    name: 'Bob Smith',
-    email: 'bob@student.dev',
-    passwordHash: DEMO_PASSWORD_HASH,
-    role: 'student',
+    role: 'faculty',
     createdAt: new Date(),
     toJSON() {
       return { _id: this._id, name: this.name, email: this.email, role: this.role, createdAt: this.createdAt };
     },
   },
 ];
+
+export const inMemoryEnrollments = [];
 
 export const STARTER_CODE = `# Starter code provided by professor
 def read_input():
@@ -90,6 +70,8 @@ export const inMemoryAssignments = [
     title: 'Sorting Algorithm Implementation',
     description: 'Implement a sorting algorithm to sort an array of integers in ascending order.',
     professorId: '65c100000000000000000001',
+    assignmentCode: 'BST-7K42',
+    targetGroup: { department: 'CSE', division: 'D3', batch: '2023' },
     languageAllowed: 'python',
     deadline: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
     similarityThreshold: 0.5,
@@ -105,10 +87,11 @@ export const inMemorySubmissions = [
   {
     _id: '65c300000000000000000001',
     assignmentId: { _id: '65c200000000000000000001', title: 'Sorting Algorithm Implementation', languageAllowed: 'python' },
-    studentId: { _id: '65c100000000000000000002', name: 'Alice Johnson', email: 'alice@student.dev' },
+    studentIdentifier: 'Average1',
+    studentName: 'Average1',
     code: CODE_A,
     language: 'python',
-    fileName: 'bubble_sort.py',
+    fileName: 'Average1.py',
     version: 1,
     status: 'fingerprinted',
     submittedAt: new Date(),
@@ -117,10 +100,11 @@ export const inMemorySubmissions = [
   {
     _id: '65c300000000000000000002',
     assignmentId: { _id: '65c200000000000000000001', title: 'Sorting Algorithm Implementation', languageAllowed: 'python' },
-    studentId: { _id: '65c100000000000000000003', name: 'Bob Smith', email: 'bob@student.dev' },
+    studentIdentifier: 'Average2',
+    studentName: 'Average2',
     code: CODE_B,
     language: 'python',
-    fileName: 'sort_array.py',
+    fileName: 'Average2.py',
     version: 1,
     status: 'fingerprinted',
     submittedAt: new Date(),
@@ -159,8 +143,8 @@ export const inMemoryResults = [
     assignmentId: '65c200000000000000000001',
     submissionA: '65c300000000000000000001',
     submissionB: '65c300000000000000000002',
-    studentA: { _id: '65c100000000000000000002', name: 'Alice Johnson', email: 'alice@student.dev' },
-    studentB: { _id: '65c100000000000000000003', name: 'Bob Smith', email: 'bob@student.dev' },
+    studentA: 'Average1',
+    studentB: 'Average2',
     rawScore: jaccard.score,
     adjustedScore: adjusted.adjustedScore,
     matchedHashes: adjusted.nonBoilerplateMatches,

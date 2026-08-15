@@ -11,9 +11,11 @@ export default function Navbar() {
     navigate('/login');
   };
 
+  const isStudent = user?.role === 'student';
+
   return (
     <nav className="navbar">
-      <Link to="/" className="navbar-brand" style={{ textDecoration: 'none' }}>
+      <Link to={user ? (isStudent ? '/student/dashboard' : '/dashboard') : '/'} className="navbar-brand" style={{ textDecoration: 'none' }}>
         <svg width="28" height="28" viewBox="0 0 32 32" fill="none">
           <rect width="32" height="32" rx="8" fill="url(#grad)" />
           <path d="M10 16L14 20L22 12" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
@@ -30,14 +32,20 @@ export default function Navbar() {
       <div className="navbar-links">
         {user ? (
           <>
-            <Link to="/faculty" className="navbar-link">
-              Faculty Dashboard
-            </Link>
+            {isStudent ? (
+              <Link to="/student/dashboard" className="navbar-link">
+                My Dashboard
+              </Link>
+            ) : (
+              <Link to="/dashboard" className="navbar-link">
+                Faculty Dashboard
+              </Link>
+            )}
             <Link to="/demo" className="navbar-link">
               Algorithm Demo
             </Link>
             <span style={{ color: 'var(--cg-text-muted)', fontSize: '0.8rem' }}>
-              {user.name} (Faculty)
+              {user.name} ({isStudent ? `Student ID: ${user.studentId || 'N/A'}` : 'Faculty'})
             </span>
             <button onClick={handleLogout} className="btn btn-sm btn-secondary">
               Logout
@@ -45,9 +53,10 @@ export default function Navbar() {
           </>
         ) : (
           <>
+            <Link to="/submit" className="navbar-link">Student Portal</Link>
             <Link to="/demo" className="navbar-link">Algorithm Demo</Link>
-            <Link to="/login" className="navbar-link">Faculty Login</Link>
-            <Link to="/register" className="btn btn-sm btn-primary">Faculty Register</Link>
+            <Link to="/login" className="navbar-link">Sign In</Link>
+            <Link to="/register" className="btn btn-sm btn-primary">Register</Link>
           </>
         )}
       </div>

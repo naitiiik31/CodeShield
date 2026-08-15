@@ -99,11 +99,11 @@ export async function ensureDemoDataSeeded() {
   try {
     const userCount = await User.countDocuments();
     if (userCount > 0) {
-      console.log('✅ Database already populated with Faculty accounts.');
+      console.log('Database already populated with Faculty accounts.');
       return;
     }
 
-    console.log('🌱 Database is empty. Auto-seeding Faculty demo data...');
+    console.log('Database is empty. Auto-seeding Faculty demo data...');
 
     const passwordHash = await bcrypt.hash('password123', 10);
 
@@ -118,6 +118,8 @@ export async function ensureDemoDataSeeded() {
       title: 'CS101: Average & Array Computation',
       description: 'Implement average calculation in Python. Standard I/O functions provided in starter code.',
       professorId: faculty._id,
+      assignmentCode: 'BST-7K42',
+      targetGroup: { department: 'CSE', division: 'D3', batch: '2023' },
       languageAllowed: 'python',
       deadline: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
       similarityThreshold: 0.5,
@@ -235,9 +237,9 @@ export async function ensureDemoDataSeeded() {
     assignment1.submissionCount = subs1.length;
     await assignment1.save();
 
-    console.log('🎉 Demo Faculty data auto-seeded successfully!');
+    console.log('Demo Faculty data auto-seeded successfully!');
     console.log('   Faculty: professor@codeguard.dev / password123');
   } catch (err) {
-    console.error('⚠️ Auto-seeding failed:', err);
+    console.error('Auto-seeding failed:', err);
   }
 }

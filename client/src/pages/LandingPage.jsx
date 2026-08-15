@@ -44,24 +44,17 @@ export default function LandingPage() {
 
         {/* Supported Languages Badges */}
         <div style={{ display: 'flex', gap: '10px', justifyContent: 'center', flexWrap: 'wrap', marginBottom: '40px' }}>
-          {[
-            { name: 'Python', icon: '🐍' },
-            { name: 'JavaScript', icon: '🟨' },
-            { name: 'Java', icon: '☕' },
-            { name: 'C++', icon: '⚡' },
-            { name: 'C', icon: '🔵' },
-            { name: 'C#', icon: '🟦' },
-          ].map((lang) => (
-            <span key={lang.name} style={{
+          {['Python', 'JavaScript', 'Java', 'C++', 'C', 'C#'].map((name) => (
+            <span key={name} style={{
               padding: '6px 16px',
               background: 'rgba(99, 102, 241, 0.1)',
               border: '1px solid rgba(99, 102, 241, 0.25)',
               borderRadius: '20px',
               color: '#818cf8',
-              fontSize: '0.9rem',
+              fontSize: '0.85rem',
               fontWeight: 600,
             }}>
-              {lang.icon} {lang.name}
+              {name}
             </span>
           ))}
         </div>

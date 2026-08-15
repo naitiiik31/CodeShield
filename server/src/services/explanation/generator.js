@@ -74,12 +74,9 @@ export function generateExplanation(input) {
   return explanations;
 }
 
-export function determineRiskLevel(adjustedScore, threshold = 0.5) {
-  const highCutoff = Math.max(0.7, threshold);
-  const mediumCutoff = Math.min(0.4, threshold * 0.8);
-
-  if (adjustedScore >= highCutoff) return 'high';
-  if (adjustedScore >= mediumCutoff) return 'medium';
+export function determineRiskLevel(score, threshold = 0.5) {
+  if (score >= 0.7) return 'high';
+  if (score >= 0.4) return 'medium';
   return 'low';
 }
 

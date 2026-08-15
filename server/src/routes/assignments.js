@@ -7,6 +7,7 @@ import {
   deleteAssignment,
   updateThreshold,
   updateBoilerplateSettings,
+  updateAssignmentDeadline,
   createAssignmentSchema,
   updateAssignmentSchema,
 } from '../controllers/assignmentController.js';
@@ -31,6 +32,7 @@ router.patch(
 );
 router.delete('/:id', deleteAssignment);
 
+router.patch('/:id/deadline', updateAssignmentDeadline);
 router.patch('/:id/threshold', updateThreshold);
 router.patch(
   '/:id/boilerplate-settings',

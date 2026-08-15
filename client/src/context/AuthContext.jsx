@@ -25,15 +25,17 @@ export function AuthProvider({ children }) {
     setUser(u);
     localStorage.setItem('codeguard_token', t);
     localStorage.setItem('codeguard_user', JSON.stringify(u));
+    return u;
   };
 
-  const register = async (name, email, password, role) => {
-    const res = await api.post('/auth/register', { name, email, password, role });
+  const register = async (name, email, password, role = 'faculty', studentId, department, division, batch) => {
+    const res = await api.post('/auth/register', { name, email, password, role, studentId, department, division, batch });
     const { token: t, user: u } = res.data;
     setToken(t);
     setUser(u);
     localStorage.setItem('codeguard_token', t);
     localStorage.setItem('codeguard_user', JSON.stringify(u));
+    return u;
   };
 
   const logout = () => {

@@ -1,9 +1,11 @@
 import path from 'path';
 import AdmZip from 'adm-zip';
+import mongoose from 'mongoose';
 import { Submission } from '../models/Submission.js';
 import { Assignment } from '../models/Assignment.js';
 import { getFingerprintQueue } from '../queues/index.js';
 import { processSubmissionFingerprint } from '../workers/fingerprintWorker.js';
+import { inMemoryAssignments, inMemorySubmissions } from '../services/inMemoryStore.js';
 
 const EXTENSION_MAP = {
   '.py': 'python',
@@ -25,14 +27,14 @@ function parseCsvMapping(csvText) {
   const lines = csvText.split(/\r?\n/);
   for (const line of lines) {
     const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith('student_id')) continue;
+    if (!trimmed || trimmed.toLowerCase().startsWith('student_id')) continue;
     const parts = trimmed.split(',').map((p) => p.trim());
     if (parts.length >= 3) {
       const [id, name, filename] = parts;
-      map.set(filename.toLowerCase(), { identifier: id, name });
+      if (filename) map.set(filename.toLowerCase(), { identifier: id, name });
     } else if (parts.length === 2) {
       const [id, filename] = parts;
-      map.set(filename.toLowerCase(), { identifier: id, name: id });
+      if (filename) map.set(filename.toLowerCase(), { identifier: id, name: id });
     }
   }
   return map;
@@ -51,12 +53,26 @@ function extractStudentIdentifier(filename, csvMap) {
   return { identifier, name: identifier };
 }
 
+function isSafeZipEntry(entryName) {
+  if (!entryName) return false;
+  const normalized = entryName.replace(/\\/g, '/');
+  if (normalized.includes('../') || normalized.includes('..\\')) return false;
+  if (normalized.startsWith('__MACOSX') || normalized.includes('/.')) return false;
+  return true;
+}
+
 export async function uploadFacultySubmissions(req, res) {
   try {
     const { assignmentId } = req.params;
     const assignment = await Assignment.findById(assignmentId);
     if (!assignment) {
       res.status(404).json({ error: 'Assignment not found' });
+      return;
+    }
+
+    // Enforce Assignment Ownership Check
+    if (assignment.professorId && req.user._id && assignment.professorId.toString() !== req.user._id.toString()) {
+      res.status(403).json({ error: 'Access denied: You do not own this assignment' });
       return;
     }
 
@@ -80,11 +96,11 @@ export async function uploadFacultySubmissions(req, res) {
           const zipEntries = zip.getEntries();
 
           for (const entry of zipEntries) {
-            if (entry.isDirectory || entry.entryName.startsWith('__MACOSX')) continue;
+            if (entry.isDirectory || !isSafeZipEntry(entry.entryName)) continue;
             const entryExt = path.extname(entry.entryName).toLowerCase();
             if (EXTENSION_MAP[entryExt]) {
               const code = entry.getData().toString('utf-8');
-              if (code.trim()) {
+              if (code && code.trim()) {
                 filesToProcess.push({
                   filename: path.basename(entry.entryName),
                   code,
@@ -98,7 +114,7 @@ export async function uploadFacultySubmissions(req, res) {
         }
       } else if (EXTENSION_MAP[ext]) {
         const code = file.buffer.toString('utf-8');
-        if (code.trim()) {
+        if (code && code.trim()) {
           filesToProcess.push({
             filename: file.originalname,
             code,
@@ -109,7 +125,7 @@ export async function uploadFacultySubmissions(req, res) {
     }
 
     // Process text code input fallback
-    if (req.body.code && req.body.fileName) {
+    if (req.body.code && req.body.fileName && req.body.code.trim()) {
       const ext = path.extname(req.body.fileName).toLowerCase() || '.py';
       filesToProcess.push({
         filename: req.body.fileName,
@@ -119,7 +135,7 @@ export async function uploadFacultySubmissions(req, res) {
     }
 
     if (filesToProcess.length === 0) {
-      res.status(400).json({ error: 'No valid source code files (.py, .js, .java, .cpp, .c, .cs) provided in upload.' });
+      res.status(400).json({ error: 'No valid non-empty source code files (.py, .js, .java, .cpp, .c, .cs) provided.' });
       return;
     }
 
@@ -130,7 +146,6 @@ export async function uploadFacultySubmissions(req, res) {
       const { identifier, name } = extractStudentIdentifier(fileItem.filename, csvMap);
       const language = EXTENSION_MAP[fileItem.extension] || assignment.languageAllowed || 'python';
 
-      // Check existing version count for this studentIdentifier & assignment
       const existingCount = await Submission.countDocuments({
         assignmentId,
         studentIdentifier: identifier,
@@ -149,7 +164,6 @@ export async function uploadFacultySubmissions(req, res) {
 
       createdSubmissions.push(submission);
 
-      // Queue fingerprint job asynchronously
       let queued = false;
       try {
         if (queue) {
@@ -169,7 +183,6 @@ export async function uploadFacultySubmissions(req, res) {
       }
     }
 
-    // Update assignment submission count
     const totalSubmissions = await Submission.countDocuments({ assignmentId });
     assignment.submissionCount = totalSubmissions;
     await assignment.save();
@@ -194,6 +207,17 @@ export async function uploadFacultySubmissions(req, res) {
 export async function getAssignmentSubmissions(req, res) {
   try {
     const { assignmentId } = req.params;
+    const assignment = await Assignment.findById(assignmentId);
+    if (!assignment) {
+      res.status(404).json({ error: 'Assignment not found' });
+      return;
+    }
+
+    if (assignment.professorId && req.user._id && assignment.professorId.toString() !== req.user._id.toString()) {
+      res.status(403).json({ error: 'Access denied: You do not own this assignment' });
+      return;
+    }
+
     const submissions = await Submission.find({ assignmentId }).sort({ submittedAt: -1 });
     res.json(submissions);
   } catch (error) {
@@ -209,9 +233,260 @@ export async function deleteSubmission(req, res) {
       res.status(404).json({ error: 'Submission not found' });
       return;
     }
+
+    const assignment = await Assignment.findById(sub.assignmentId);
+    if (assignment && assignment.professorId && req.user._id && assignment.professorId.toString() !== req.user._id.toString()) {
+      res.status(403).json({ error: 'Access denied' });
+      return;
+    }
+
     await Submission.findByIdAndDelete(id);
+
+    if (assignment) {
+      const totalSubmissions = await Submission.countDocuments({ assignmentId: sub.assignmentId });
+      assignment.submissionCount = totalSubmissions;
+      await assignment.save();
+    }
+
     res.json({ message: 'Submission deleted successfully' });
   } catch (error) {
     res.status(500).json({ error: 'Failed to delete submission' });
   }
 }
+
+export async function submitStudentCode(req, res) {
+  try {
+    const assignmentCode = (req.body.assignmentCode || req.params.assignmentCode || '').trim().toUpperCase();
+    const studentIdentifier = (req.body.studentIdentifier || '').trim();
+    const studentName = (req.body.studentName || studentIdentifier).trim();
+
+    if (!assignmentCode || !studentIdentifier) {
+      res.status(400).json({ error: 'Assignment code and Student ID are required' });
+      return;
+    }
+
+    let assignment = null;
+    if (mongoose.connection.readyState === 1) {
+      assignment = await Assignment.findOne({ assignmentCode });
+    } else {
+      assignment = inMemoryAssignments.find(
+        (a) => (a.assignmentCode || '').toUpperCase() === assignmentCode
+      );
+    }
+
+    if (!assignment) {
+      res.status(404).json({ error: `Assignment not found for code: ${assignmentCode}` });
+      return;
+    }
+
+    // STRICT DEADLINE CHECK (Backend Authority)
+    const now = new Date();
+    const deadline = new Date(assignment.deadline);
+    if (now >= deadline) {
+      res.status(400).json({ error: 'Submission deadline has passed.' });
+      return;
+    }
+
+    let code = '';
+    let fileName = 'submission';
+    let ext = '.py';
+
+    if (req.file) {
+      fileName = req.file.originalname;
+      ext = path.extname(fileName).toLowerCase();
+      code = req.file.buffer.toString('utf-8');
+    } else if (req.body.code) {
+      code = req.body.code;
+      fileName = req.body.fileName || `submission${assignment.languageAllowed === 'javascript' ? '.js' : '.py'}`;
+      ext = path.extname(fileName).toLowerCase() || '.py';
+    }
+
+    if (!EXTENSION_MAP[ext]) {
+      res.status(400).json({
+        error: `Unsupported file extension '${ext}'. Allowed extensions: .py, .js, .java, .cpp, .c, .cs`,
+      });
+      return;
+    }
+
+    if (!code || !code.trim()) {
+      res.status(400).json({ error: 'File content or code cannot be empty' });
+      return;
+    }
+
+    const language = EXTENSION_MAP[ext] || assignment.languageAllowed || 'python';
+
+    if (mongoose.connection.readyState === 1) {
+      const existingCount = await Submission.countDocuments({
+        assignmentId: assignment._id,
+        studentIdentifier,
+      });
+
+      const version = existingCount + 1;
+
+      const submission = await Submission.create({
+        assignmentId: assignment._id,
+        studentIdentifier,
+        studentName,
+        code,
+        language,
+        fileName,
+        version,
+        status: 'queued',
+      });
+
+      let queued = false;
+      const queue = getFingerprintQueue();
+      try {
+        if (queue) {
+          await queue.add('fingerprint-job', { submissionId: submission._id.toString() });
+          queued = true;
+        }
+      } catch (err) {
+        console.warn('BullMQ Redis offline for student submission fingerprinting, using async fallback...');
+      }
+
+      if (!queued) {
+        setImmediate(() => {
+          processSubmissionFingerprint(submission._id.toString()).catch((err) => {
+            console.error(`Async fingerprint error for student submission ${submission._id}:`, err);
+          });
+        });
+      }
+
+      const totalSubmissions = await Submission.countDocuments({ assignmentId: assignment._id });
+      assignment.submissionCount = totalSubmissions;
+      await assignment.save();
+
+      res.status(201).json({
+        message: 'Submission received successfully',
+        submission: {
+          _id: submission._id,
+          studentIdentifier: submission.studentIdentifier,
+          studentName: submission.studentName,
+          fileName: submission.fileName,
+          version: submission.version,
+          status: submission.status,
+          submittedAt: submission.submittedAt,
+        },
+      });
+      return;
+    }
+
+    // In-memory fallback
+    const existingCount = inMemorySubmissions.filter(
+      (s) =>
+        (s.assignmentId?._id?.toString() === assignment._id.toString() ||
+          s.assignmentId?.toString() === assignment._id.toString()) &&
+        s.studentIdentifier === studentIdentifier
+    ).length;
+
+    const version = existingCount + 1;
+    const sub = {
+      _id: '65c3' + Date.now().toString(16).padStart(20, '0'),
+      assignmentId: assignment._id,
+      studentIdentifier,
+      studentName,
+      code,
+      language,
+      fileName,
+      version,
+      status: 'fingerprinted',
+      submittedAt: new Date(),
+      toJSON() { return this; },
+    };
+
+    inMemorySubmissions.push(sub);
+    assignment.submissionCount = (assignment.submissionCount || 0) + 1;
+
+    res.status(201).json({
+      message: 'Submission received successfully',
+      submission: {
+        _id: sub._id,
+        studentIdentifier: sub.studentIdentifier,
+        studentName: sub.studentName,
+        fileName: sub.fileName,
+        version: sub.version,
+        status: sub.status,
+        submittedAt: sub.submittedAt,
+      },
+    });
+  } catch (error) {
+    console.error('Student submission error:', error);
+    res.status(500).json({ error: 'Failed to process student submission' });
+  }
+}
+
+export async function getStudentSubmissionStatus(req, res) {
+  try {
+    const code = (req.query.assignmentCode || req.params.code || '').trim().toUpperCase();
+    const studentIdentifier = (req.query.studentIdentifier || '').trim();
+
+    if (!code || !studentIdentifier) {
+      res.status(400).json({ error: 'Assignment code and Student ID are required' });
+      return;
+    }
+
+    let assignment = null;
+    let submissions = [];
+
+    if (mongoose.connection.readyState === 1) {
+      assignment = await Assignment.findOne({ assignmentCode: code });
+      if (assignment) {
+        submissions = await Submission.find({
+          assignmentId: assignment._id,
+          studentIdentifier,
+        }).sort({ version: -1 });
+      }
+    } else {
+      assignment = inMemoryAssignments.find(
+        (a) => (a.assignmentCode || '').toUpperCase() === code
+      );
+      if (assignment) {
+        submissions = inMemorySubmissions
+          .filter(
+            (s) =>
+              (s.assignmentId?._id?.toString() === assignment._id.toString() ||
+                s.assignmentId?.toString() === assignment._id.toString()) &&
+              s.studentIdentifier === studentIdentifier
+          )
+          .sort((a, b) => b.version - a.version);
+      }
+    }
+
+    if (!assignment) {
+      res.status(404).json({ error: `Assignment not found for code: ${code}` });
+      return;
+    }
+
+    const isClosed = new Date() >= new Date(assignment.deadline);
+
+    const formattedHistory = submissions.map((s, index) => ({
+      _id: s._id,
+      version: s.version,
+      fileName: s.fileName,
+      language: s.language,
+      status: s.status,
+      submittedAt: s.submittedAt,
+      isLatest: index === 0,
+    }));
+
+    res.json({
+      assignment: {
+        _id: assignment._id,
+        title: assignment.title,
+        description: assignment.description || '',
+        languageAllowed: assignment.languageAllowed,
+        deadline: assignment.deadline,
+        assignmentCode: assignment.assignmentCode,
+        isClosed,
+      },
+      studentIdentifier,
+      hasSubmitted: formattedHistory.length > 0,
+      latestSubmission: formattedHistory[0] || null,
+      history: formattedHistory,
+    });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch student submission status' });
+  }
+}
+
