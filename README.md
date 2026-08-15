@@ -1,163 +1,256 @@
-# CodeShield / CodeGuard
+<div align="center">
 
-> **Enterprise Multi-Language Code Plagiarism & Similarity Detection System**  
-> Scalable candidate generation, robust document winnowing, real-time Myers code diffing, and Union-Find plagiarism cluster detection.
+# CodeShield
+
+**Code similarity and plagiarism detection platform for programming assignments**
+CodeShield is a full-stack code plagiarism detection platform for programming assignments. Faculty can create assignments, students submit code, and CodeShield identifies suspicious similarities even when students rename variables, modify formatting, or copy only parts of a solution.
+Built on tokenization, k-gram hashing, and the Winnowing algorithm — the same class of technique used by MOSS — to detect copied code even after variable renaming, formatting changes, or comment removal.
+
+`React` · `Node.js` · `Express` · `MongoDB` · `Redis` · `BullMQ` · `JWT`
+
+</div>
 
 ---
 
-## 🌟 Overview
+## Table of contents
 
-**CodeShield** (also referred to as **CodeGuard**) is an end-to-end code plagiarism analysis and evidence visualization platform designed for computer science education and automated academic integrity enforcement. 
-
-Rather than relying on naive pairwise comparisons or simple text matching, CodeShield implements an advanced algorithmic pipeline combining **tokenization**, **winnowing fingerprinting**, **inverted index candidate generation**, **Myers shortest edit script code diffing**, and **Union-Find cluster detection**.
+1. [Why this exists](#why-this-exists)
+2. [How it works](#how-it-works)
+3. [Key features](#key-features)
+4. [Architecture](#architecture)
+5. [Tech stack](#tech-stack)
+6. [Project structure](#project-structure)
+7. [Getting started](#getting-started)
+8. [Environment variables](#environment-variables)
+9. [API overview](#api-overview)
+10. [Testing](#testing)
+11. [Scaling notes](#scaling-notes)
+12. [Roadmap](#roadmap)
+13. [Author](#author)
 
 ---
 
-## ⚡ Core Algorithmic Architecture
+## Why this exists
 
-```mermaid
-flowchart TD
-    A[Student Submissions] --> B[Latest Valid Versions Filter]
-    B --> C[Language-Specific Tokenizer]
-    C --> D[Canonical K-Grams Generation]
-    D --> E[Rolling Hash Computation]
-    E --> F[Winnowing Fingerprinting]
-    F --> G[Inverted Fingerprint Index]
-    G --> H[Candidate Generation Filter]
-    H --> I[Jaccard Similarity Engine & Boilerplate Detector]
-    I --> J[Raw & Adjusted Similarity Scores]
-    J --> K[SimilarityResult Persistence]
-    K --> L[Faculty Investigation]
-    L --> M[Myers Diff Engine Line & Token]
-    L --> N[Union-Find Cluster Detector DSU]
-    M --> O[Side-by-Side Code Compare UI]
-    N --> P[Plagiarism Group Visualization]
+Professors reviewing dozens or hundreds of programming assignments can't realistically eyeball every submission for copied code, and naive text diffing misses the most common disguises: renamed variables, reformatted whitespace, stripped comments, or reordered statements.
+
+CodeShield normalizes source code down to its structural skeleton before comparing it, so two submissions that look different on the surface but share the same underlying logic still get flagged — while giving professors evidence they can actually act on, not a black-box accusation.
+
+## How it works
+
+```
+Source code
+    │
+    ▼
+Tokenization           strip comments/whitespace, normalize identifiers → VAR, NUM, STR
+    │
+    ▼
+K-grams                 sliding window over the token stream
+    │
+    ▼
+Polynomial rolling hash  hash each k-gram
+    │
+    ▼
+Winnowing                select local-minimum hashes → compact fingerprint set
+    │
+    ▼
+Jaccard similarity        |A ∩ B| / |A ∪ B| between fingerprint sets
+    │
+    ▼
+Boilerplate filter        down-weight hashes shared by most of the class (starter code)
+    │
+    ▼
+Ranked, explainable results
 ```
 
-### 1. Multi-Language Token Normalization
-Raw source code is passed to language-specific lexers for **Python, JavaScript, Java, C, C++, and C#**. Comments and whitespace are stripped while variables, literals, keywords, and operators are mapped to normalized token categories (`VAR`, `NUM`, `IF`, `FOR`, `OPERATOR`). This guarantees resilience against variable renaming, comment insertion, and cosmetic reformatting.
+**Example — why renaming doesn't defeat it:**
 
-### 2. K-Grams & Winnowing Fingerprinting
-Normalized token streams are split into contiguous $k$-grams ($k=5$). Each $k$-gram is hashed into a numeric fingerprint. The **Winnowing algorithm** evaluates windows of hashes ($w=4$) to select minimum hashes per window, producing a compact, position-mapped set of document fingerprints invariant to local insertion and deletion.
-
-### 3. Inverted Index & Candidate Generation
-To prevent scaling bottlenecks ($O(n^2)$ pairwise comparisons across 100+ submissions), CodeShield builds an **Inverted Fingerprint Index** (`hash -> submissionId[]`). Submissions sharing winnowed fingerprints generate candidate pairs (`subA < subB`). Non-overlapping pairs are filtered out early, yielding dramatic pair-count reductions ($0\%\text{--}100\%$).
-
-### 4. Boilerplate-Aware Similarity Engine
-Professor-provided starter code is fingerprinted automatically. Overlapping starter code fingerprints are down-weighted during Jaccard similarity scoring to eliminate false positives on template code.
-
-### 5. Myers Shortest Edit Script (SES) Diff Engine
-When a faculty member inspects a suspicious pair, the backend executes a pure-JavaScript **Myers Diff Algorithm** operating at both line and token levels. Edit operations (`equal`, `delete`, `insert`, `modify`) are mapped back to verbatim original source text, line numbers, and character offsets (`startOffset`, `endOffset`) for side-by-side Monaco editor visualization. Large file protection guards automatically fall back to line-level diffs for massive source files.
-
-### 6. Union-Find Plagiarism Cluster Detection
-To detect plagiarism rings where 4--5 students share or copy code from the same source, CodeShield applies a **Disjoint Set Union (DSU)** algorithm with **Path Compression** and **Union by Rank**. Submissions with pairwise similarity $\ge \text{threshold}$ are merged into connected components. Clusters of size $\ge 2$ surface as grouped plagiarism rings with average similarity, peak pair metrics, and submission timestamp gap analytics.
-
----
-
-## 🛠️ Tech Stack & Key Technologies
-
-- **Frontend:** React 18, Vite, Monaco Editor (`@monaco-editor/react`), Recharts, Vanilla CSS (CSS Variables)
-- **Backend:** Node.js, Express, MongoDB / Mongoose, In-Memory MongoDB Fallback, BullMQ, Redis
-- **Testing:** Vitest (79 unit tests across 8 test suites)
-- **Algorithms:** Winnowing Fingerprinting, Inverted Indexing, Myers Shortest Edit Script (SES), Union-Find (Disjoint Set Union)
-
----
-
-## 📁 Repository Structure
-
-```text
-CodeShield/
-├── client/                     # Vite + React Frontend Application
-│   ├── src/
-│   │   ├── components/         # Navigation, Modals, Shared UI
-│   │   ├── context/            # Authentication Context
-│   │   ├── pages/              # Landing, Dashboards, Results, Compare Code
-│   │   └── services/           # Axios API Client
-│   └── package.json
-├── server/                     # Node.js + Express Backend API
-│   ├── src/
-│   │   ├── config/             # Environment, Database, Redis Config
-│   │   ├── controllers/        # Assignment, Analysis, Auth Controllers
-│   │   ├── middleware/         # JWT Authentication & RBAC Middleware
-│   │   ├── models/             # Mongoose Models (Assignment, Submission, SimilarityResult)
-│   │   ├── queues/             # BullMQ Analysis Queue
-│   │   ├── routes/             # Express API Routes
-│   │   ├── services/
-│   │   │   ├── boilerplate/    # Starter Code Detection
-│   │   │   ├── diff/           # Myers Code Diff Engine & Tests
-│   │   │   ├── explanation/    # Natural Language Evidence Generator
-│   │   │   ├── fingerprint/    # K-Grams, Hashing & Winnowing
-│   │   │   ├── similarity/     # Candidate Generator, Jaccard & Union-Find Clusters
-│   │   │   └── tokenizer/      # Multi-Language Lexers (PY, JS, Java, C, C++, C#)
-│   │   └── workers/            # BullMQ Async Analysis Worker
-│   └── package.json
-└── README.md
+```
+total += arr[i]      →  VAR += VAR [ VAR ]
+sum   += values[j]    →  VAR += VAR [ VAR ]
 ```
 
----
+Both lines normalize to an identical token sequence, so structurally identical code is caught regardless of what the variables are called.
 
-## 🚀 Getting Started
+## Key features
+
+- **Multi-language tokenization** — Python, JavaScript, Java, C++, C, and C# via a pluggable tokenizer interface, with automatic language detection from file extension or content
+- **Winnowing fingerprinting** — Schleimer et al.'s sliding-window algorithm with deterministic tie-breaking; any matching substring of length `t ≥ k + w − 1` is guaranteed to produce at least one shared fingerprint
+- **Boilerplate-aware scoring** — automatically detects and discounts hashes that appear across most of the cohort (professor-provided starter code), so shared boilerplate doesn't inflate similarity scores
+- **Inverted-index candidate generation** — maps `hash → [submissionIds]` so only submissions that actually share a fingerprint get compared, cutting naive O(N²) pairwise comparison down dramatically at scale
+- **Explainable evidence reports** — matched line-range regions, raw vs. boilerplate-adjusted similarity, and risk-level classification, so professors see *why* a pair was flagged
+- **Two real roles with JWT auth** — students self-register, join assignments via an assignment code, and submit/resubmit their own work; faculty create assignments, monitor submissions, and review results
+- **Resubmission versioning** — every resubmission is tracked with a version number and an `isLatest` flag; only the latest version per student is used in comparisons
+- **Side-by-side comparison view** — highlighted matching regions between any two flagged submissions
+- **Interactive algorithm demo page** — a live, click-through visualization of the tokenize → k-gram → hash → winnow pipeline for demoing the core logic
+- **Asynchronous background processing** — fingerprint generation and full-assignment analysis run as BullMQ/Redis jobs with retry and exponential backoff, so the API never blocks on heavy computation
+- **In-memory fallback mode** — the app runs and demos correctly even without MongoDB/Redis connected, backed by a seeded in-memory store
+
+## Architecture
+
+```
+┌─────────────────────────┐
+│  React client (Vite)    │
+│  faculty + student UI   │
+└────────────┬─────────────┘
+             │ REST API (JWT)
+             ▼
+┌─────────────────────────┐
+│  Express API server     │
+│  auth · assignments ·   │
+│  submissions · analysis │
+└──────┬──────────┬────────┘
+       │          │
+       ▼          ▼
+┌───────────┐  ┌─────────────────┐
+│ MongoDB    │  │ Redis + BullMQ  │
+│ users,     │  │ fingerprint-    │
+│ assignments,│  │ queue,          │
+│ submissions,│  │ analysis-queue  │
+│ results    │  └────────┬────────┘
+└───────────┘            │
+                          ▼
+              ┌─────────────────────────┐
+              │  Background workers      │
+              │  tokenize → kgram →      │
+              │  hash → winnow → Jaccard │
+              └─────────────────────────┘
+```
+
+## Tech stack
+
+| Layer | Choice |
+|---|---|
+| Frontend | React, Vite, React Router |
+| Backend | Node.js, Express |
+| Database | MongoDB (Mongoose) |
+| Auth | JWT, bcrypt |
+| Queue / background jobs | Redis, BullMQ |
+| Validation | Zod |
+| Testing | Vitest, Supertest, mongodb-memory-server |
+| Security | Helmet, express-rate-limit |
+
+## Project structure
+
+```
+codeshield/
+├── client/                     React frontend
+│   └── src/
+│       ├── pages/               landing, login, register, faculty & student dashboards,
+│       │                        results, comparison view, algorithm demo
+│       ├── components/          modals, navbar, protected routes
+│       └── context/              auth context
+├── server/                     Express API
+│   └── src/
+│       ├── controllers/         auth, assignments, submissions, analysis, student
+│       ├── models/               User, Assignment, Submission, Enrollment,
+│       │                        SimilarityResult, InvertedIndex, BoilerplateFingerprint
+│       ├── services/
+│       │   ├── tokenizer/        one tokenizer per language + language detector
+│       │   ├── fingerprint/      k-gram, hash, winnow
+│       │   ├── similarity/       Jaccard, inverted-index candidate generation
+│       │   ├── boilerplate/      starter-code detection
+│       │   └── explanation/      matched-region mapping, risk classification
+│       ├── workers/               BullMQ fingerprint & analysis workers
+│       ├── queues/                queue definitions
+│       ├── middleware/            JWT auth, role guards, validation, error handling
+│       └── scripts/                seed & benchmark scripts
+└── package.json                 npm workspaces root
+```
+
+## Getting started
 
 ### Prerequisites
 
-- **Node.js** (v18.0.0 or higher)
-- **npm** (v9.0.0 or higher)
-- **MongoDB** (Optional -- falls back to automatic `MongoMemoryServer` if local MongoDB is offline)
-- **Redis** (Optional -- falls back to `setImmediate` async processing if Redis is offline)
+- Node.js v18+
+- MongoDB running locally (or update `MONGO_URI`)
+- Redis running locally (or update `REDIS_URL`) — optional, the app falls back to synchronous in-process processing if Redis is unavailable
 
-### Installation & Setup
-
-1. **Clone the repository:**
-   ```bash
-   git clone https://github.com/naitiiik31/CodeShield.git
-   cd CodeShield
-   ```
-
-2. **Install dependencies:**
-   ```bash
-   npm install
-   ```
-
-3. **Start the Development Servers (Client + Server concurrently):**
-   ```bash
-   npm run dev
-   ```
-   - **Frontend:** Runs on `http://localhost:5173`
-   - **Backend API:** Runs on `http://localhost:5000`
-
----
-
-## 🧪 Running Tests
-
-To run the complete backend unit test suite (79 tests covering tokenizers, winnowing, candidate generation, Myers diff, and Union-Find clusters):
+### Install and run
 
 ```bash
-cd server
-npm test
+# install all workspace dependencies
+npm install
+
+# seed demo data (creates a demo faculty account and sample assignment)
+npm run seed
+
+# start API + client together
+npm run dev
+
+# optional: start the background worker in a separate terminal
+npm run dev:worker
 ```
 
-To build the client application for production:
+- Client: `http://localhost:5173`
+- API: `http://localhost:5000`
+
+## Environment variables
+
+Create a `.env` file inside `server/`:
+
+```env
+PORT=5000
+NODE_ENV=development
+
+MONGO_URI=mongodb://localhost:27017/codeshield
+JWT_SECRET=change-me-in-production
+JWT_EXPIRES_IN=7d
+
+REDIS_URL=redis://localhost:6379
+
+DEFAULT_K=5
+DEFAULT_WINDOW_SIZE=4
+DEFAULT_SIMILARITY_THRESHOLD=0.5
+DEFAULT_BOILERPLATE_THRESHOLD=0.7
+
+RATE_LIMIT_WINDOW_MS=900000
+RATE_LIMIT_MAX=100
+MAX_CODE_SIZE_KB=500
+```
+
+## API overview
+
+| Method | Endpoint | Role | Description |
+|---|---|---|---|
+| POST | `/api/auth/register` | — | Register (faculty or student) |
+| POST | `/api/auth/login` | — | Log in, receive JWT |
+| GET | `/api/auth/me` | any | Current user profile |
+| POST | `/api/assignments` | faculty | Create assignment |
+| GET | `/api/assignments/:id` | faculty | Assignment detail |
+| GET | `/api/student/assignment/:code` | student | Look up assignment by join code |
+| POST | `/api/student/join` | student | Join an assignment |
+| GET | `/api/student/dashboard` | student | Enrolled assignments + submission status |
+| POST | `/api/student/assignments/:id/submit` | student | Submit or resubmit code |
+| GET | `/api/student/assignments/:id/status` | student | Submission version history |
+| POST | `/api/assignments/:id/analyze` | faculty | Trigger similarity analysis |
+| GET | `/api/assignments/:id/results` | faculty | Ranked suspicious pairs |
+| GET | `/api/results/:id/detail` | faculty | Side-by-side matched-region comparison |
+
+## Testing
 
 ```bash
-cd client
-npm run build
+npm run test --workspace=server
 ```
 
----
+50 unit tests covering the tokenizer (per language), fingerprint generation, Jaccard similarity, explanation/risk-level logic, and versioning/candidate-pair math — no database required, using pure-function tests plus `mongodb-memory-server` where persistence is involved.
 
-## 🔑 Key API Endpoints
+```bash
+npm run benchmark --workspace=server
+```
 
-| Method | Endpoint | Access | Description |
-| :--- | :--- | :--- | :--- |
-| `POST` | `/api/auth/register` | Public | Student or Professor registration |
-| `POST` | `/api/auth/login` | Public | JWT Authentication login |
-| `GET` | `/api/assignments/:id/results` | Faculty | Ranked pairwise similarity results & distribution |
-| `GET` | `/api/assignments/:id/clusters` | Faculty | Union-Find plagiarism clusters for assignment |
-| `GET` | `/api/results/:id/detail` | Faculty | Detailed result with Myers diff operations |
-| `POST` | `/api/assignments/:id/analyze` | Faculty | Trigger BullMQ / async plagiarism analysis job |
+Benchmarks fingerprint generation time and inverted-index candidate-pair reduction versus naive O(N²) comparison on a synthetic submission set.
 
----
+## Scaling notes
 
-## 💼 Interview Talking Point
+Naive pairwise comparison is `O(N²)` — fine for a class of 60–200 students, expensive at real scale. CodeShield builds an inverted index (`hash → submissionIds`) so only submissions sharing at least one fingerprint are ever compared with exact Jaccard similarity, turning the expensive step into roughly `O(N + C)` where `C` is the (much smaller) candidate-pair count. Fingerprinting and analysis also run as separate BullMQ jobs, so submission traffic and the heavier full-assignment analysis never block each other or the API.
 
-> *"I built a scalable multi-language code plagiarism engine in JavaScript. The platform uses a language-aware tokenizer and winnowing fingerprinting pipeline paired with an inverted fingerprint index to eliminate redundant pairwise comparisons ($O(n^2)$ down to actual candidate pairs). Suspicious submissions are grouped into plagiarism rings using a Union-Find (Disjoint Set Union) clustering algorithm with path compression, while individual code pairs are analyzed using a real Myers shortest-edit-script diff engine to highlight line and token changes for faculty investigation."*
+## Roadmap
+
+- [ ] Plagiarism cluster detection — group mutually similar submissions via Union-Find instead of surfacing only pairwise matches
+- [ ] LCS/diff-based matched-region highlighting (currently fingerprint-position based)
+- [ ] Exportable evidence report (PDF) per suspicious cluster
+
+## Author
+
+Built as a portfolio project to explore applying classic string/hashing algorithms (k-grams, rolling hashes, winnowing, inverted indexing) to a real, full-stack product problem.
